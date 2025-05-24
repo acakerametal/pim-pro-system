@@ -1,7 +1,7 @@
 // API service for connecting to backend
 class DatabaseService {
   constructor() {
-    this.baseURL = 'http://localhost:3001/api';
+  this.baseURL = 'https://pim-pro-system-production.up.railway.app/api';
   }
 
   async getProducts() {
