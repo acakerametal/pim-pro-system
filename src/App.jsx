@@ -434,6 +434,245 @@ const ProductsView = ({ products, attributeSets, isLoading }) => {
     </div>
   );
 };
+// Bulk Import Component
+const BulkImportView = ({ attributeSets, onImportComplete }) => {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedAttributeSet, setSelectedAttributeSet] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [previewData, setPreviewData] = useState([]);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    setSelectedFile(file);
+    setImportResult(null);
+    
+    if (file) {
+      // Preview first few rows
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const lines = text.split('\n').slice(0, 6); // First 5 rows + header
+        const preview = lines.map(line => line.split(','));
+        setPreviewData(preview);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!selectedFile || !selectedAttributeSet) {
+      alert('Please select a file and attribute set');
+      return;
+    }
+
+    setImporting(true);
+    
+    const formData = new FormData();
+    formData.append('csvFile', selectedFile);
+    formData.append('attributeSetId', selectedAttributeSet);
+
+    try {
+      const response = await fetch('https://pim-pro-system-production.up.railway.app/api/import/csv', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      setImportResult(result);
+      
+      if (result.success) {
+        onImportComplete();
+      }
+    } catch (error) {
+      setImportResult({
+        success: false,
+        message: 'Import failed: ' + error.message
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const headers = ['name', 'sku', 'price', 'status', 'featured', 'brand', 'color', 'weight'];
+    const sampleData = ['Sample Product', 'SP-001', '29.99', 'active', 'false', 'Sample Brand', 'Blue', '0.5'];
+    
+    const csvContent = [
+      headers.join(','),
+      sampleData.join(',')
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'product_import_template.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">Bulk Import Products</h1>
+        <p className="text-slate-400">Upload CSV files to import thousands of products at once</p>
+      </div>
+
+      {/* Import Form */}
+      <div className="glass-card-elevated rounded-2xl p-8">
+        <h2 className="text-xl font-bold text-white mb-6">CSV Import</h2>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Form */}
+          <div className="space-y-6">
+            {/* Attribute Set Selection */}
+            <div>
+              <label className="block text-white font-medium mb-2">Select Product Category</label>
+              <select
+                value={selectedAttributeSet}
+                onChange={(e) => setSelectedAttributeSet(e.target.value)}
+                className="input-modern w-full px-4 py-3 rounded-xl text-white"
+              >
+                <option value="">Choose Category</option>
+                {attributeSets.map(set => (
+                  <option key={set.id} value={set.id}>{set.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* File Upload */}
+            <div>
+              <label className="block text-white font-medium mb-2">Upload CSV File</label>
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                  className="input-modern w-full px-4 py-3 rounded-xl text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-500 file:text-white hover:file:bg-purple-600"
+                />
+              </div>
+              {selectedFile && (
+                <p className="text-green-400 text-sm mt-2">
+                  ✅ {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
+            </div>
+
+            {/* Import Button */}
+            <button
+              onClick={handleImport}
+              disabled={!selectedFile || !selectedAttributeSet || importing}
+              className={`w-full px-6 py-3 rounded-xl font-semibold transition-all ${
+                importing 
+                  ? 'bg-gray-500 cursor-not-allowed' 
+                  : 'button-primary hover:scale-105'
+              }`}
+            >
+              {importing ? 'Importing...' : 'Import Products'}
+            </button>
+
+            {/* Template Download */}
+            <button
+              onClick={downloadTemplate}
+              className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-all"
+            >
+              📥 Download CSV Template
+            </button>
+          </div>
+
+          {/* Right Column - Preview */}
+          <div>
+            <h3 className="text-white font-semibold mb-4">File Preview</h3>
+            {previewData.length > 0 ? (
+              <div className="glass-card rounded-xl p-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      {previewData[0]?.map((header, index) => (
+                        <th key={index} className="text-left text-white font-medium py-2 px-2">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewData.slice(1, 6).map((row, rowIndex) => (
+                      <tr key={rowIndex} className="border-b border-white/5">
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex} className="text-slate-300 py-2 px-2">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {previewData.length > 6 && (
+                  <p className="text-slate-400 text-xs mt-2">
+                    Showing first 5 rows of {previewData.length - 1} total rows
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="glass-card rounded-xl p-8 text-center">
+                <p className="text-slate-400">Select a CSV file to see preview</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Import Result */}
+        {importResult && (
+          <div className={`mt-6 p-4 rounded-xl ${
+            importResult.success 
+              ? 'bg-green-500/20 border border-green-500/30' 
+              : 'bg-red-500/20 border border-red-500/30'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <span className={`text-lg ${importResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {importResult.success ? '✅' : '❌'}
+              </span>
+              <span className={importResult.success ? 'text-green-300' : 'text-red-300'}>
+                {importResult.message}
+              </span>
+            </div>
+            {importResult.details && (
+              <div className="mt-2 text-sm text-slate-300">
+                <p>Imported: {importResult.details.imported || 0} products</p>
+                <p>Errors: {importResult.details.errors || 0}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Instructions */}
+      <div className="glass-card-elevated rounded-2xl p-6">
+        <h3 className="text-white font-semibold mb-4">CSV Format Requirements</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="text-purple-400 font-medium mb-2">Required Columns:</h4>
+            <ul className="text-slate-300 text-sm space-y-1">
+              <li>• <strong>name</strong> - Product name</li>
+              <li>• <strong>sku</strong> - Unique product code</li>
+              <li>• <strong>price</strong> - Product price (number)</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-purple-400 font-medium mb-2">Optional Columns:</h4>
+            <ul className="text-slate-300 text-sm space-y-1">
+              <li>• <strong>status</strong> - active, draft, inactive</li>
+              <li>• <strong>featured</strong> - true or false</li>
+              <li>• <strong>brand, color, weight</strong> - Product attributes</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Main App Component
 const App = () => {
@@ -491,12 +730,12 @@ const App = () => {
           </div>
         );
       case 'bulk-import':
-        return (
-          <div className="glass-card-elevated rounded-3xl p-8">
-            <h1 className="text-3xl font-bold text-white mb-4">Bulk Import</h1>
-            <p className="text-slate-400">Import functionality coming soon...</p>
-          </div>
-        );
+		return (
+			<BulkImportView 
+			attributeSets={attributeSets} 
+			onImportComplete={() => loadData()} 
+			/>
+		);
       case 'export':
         return (
           <div className="glass-card-elevated rounded-3xl p-8">
