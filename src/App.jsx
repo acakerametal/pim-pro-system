@@ -328,10 +328,13 @@ const ProductsView = ({ products, attributeSets, isLoading }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Products</h1>
           <p className="text-slate-400">Manage your product catalog</p>
         </div>
-        <button className="button-primary flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold text-white">
-          <Icons.add />
-          <span>Add Product</span>
-        </button>
+        <button 
+			onClick={() => setCurrentView('add-product')}
+			className="button-primary flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold text-white"
+		>
+			<Icons.add />
+			<span>Add Product</span>
+		</button>
       </div>
 
       <div className="glass-card-elevated rounded-2xl p-6">
@@ -670,6 +673,381 @@ const BulkImportView = ({ attributeSets, onImportComplete }) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// Product Form Component
+const ProductFormView = ({ attributeSets, onProductSaved, editingProduct = null }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    sku: '',
+    price: '',
+    status: 'draft',
+    featured: false,
+    attribute_set_id: '',
+    attributes: {}
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState(null);
+
+  // Initialize form data if editing
+  useEffect(() => {
+    if (editingProduct) {
+      setFormData({
+        name: editingProduct.name || '',
+        sku: editingProduct.sku || '',
+        price: editingProduct.price || '',
+        status: editingProduct.status || 'draft',
+        featured: editingProduct.featured || false,
+        attribute_set_id: editingProduct.attribute_set_id || '',
+        attributes: editingProduct.attributes || {}
+      });
+    }
+  }, [editingProduct]);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleAttributeChange = (attributeName, value) => {
+    setFormData(prev => ({
+      ...prev,
+      attributes: {
+        ...prev.attributes,
+        [attributeName]: value
+      }
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.name || !formData.sku || !formData.price || !formData.attribute_set_id) {
+      setSaveResult({
+        success: false,
+        message: 'Please fill in all required fields'
+      });
+      return;
+    }
+
+    setSaving(true);
+    setSaveResult(null);
+
+    try {
+      const payload = {
+        name: formData.name,
+        sku: formData.sku,
+        price: parseFloat(formData.price),
+        status: formData.status,
+        featured: formData.featured,
+        attribute_set_id: parseInt(formData.attribute_set_id),
+        attributes: formData.attributes
+      };
+
+      const url = editingProduct 
+        ? `https://pim-pro-system-production.up.railway.app/api/products/${editingProduct.id}`
+        : 'https://pim-pro-system-production.up.railway.app/api/products';
+      
+      const method = editingProduct ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        setSaveResult({
+          success: true,
+          message: editingProduct ? 'Product updated successfully!' : 'Product created successfully!'
+        });
+        
+        // Reset form if creating new product
+        if (!editingProduct) {
+          setFormData({
+            name: '',
+            sku: '',
+            price: '',
+            status: 'draft',
+            featured: false,
+            attribute_set_id: '',
+            attributes: {}
+          });
+        }
+        
+        onProductSaved();
+      } else {
+        setSaveResult({
+          success: false,
+          message: result.message || 'Failed to save product'
+        });
+      }
+    } catch (error) {
+      setSaveResult({
+        success: false,
+        message: 'Error saving product: ' + error.message
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectedAttributeSet = attributeSets.find(set => set.id === parseInt(formData.attribute_set_id));
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">
+          {editingProduct ? 'Edit Product' : 'Add New Product'}
+        </h1>
+        <p className="text-slate-400">
+          {editingProduct ? 'Update product information' : 'Create a new product in your catalog'}
+        </p>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information */}
+        <div className="glass-card-elevated rounded-2xl p-8">
+          <h2 className="text-xl font-bold text-white mb-6">Basic Information</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Product Name */}
+            <div>
+              <label className="block text-white font-medium mb-2">
+                Product Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                placeholder="Enter product name"
+                required
+              />
+            </div>
+
+            {/* SKU */}
+            <div>
+              <label className="block text-white font-medium mb-2">
+                SKU <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.sku}
+                onChange={(e) => handleInputChange('sku', e.target.value)}
+                className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                placeholder="Enter unique SKU"
+                required
+              />
+            </div>
+
+            {/* Price */}
+            <div>
+              <label className="block text-white font-medium mb-2">
+                Price <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => handleInputChange('price', e.target.value)}
+                className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                placeholder="0.00"
+                required
+              />
+            </div>
+
+            {/* Attribute Set */}
+            <div>
+              <label className="block text-white font-medium mb-2">
+                Category <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={formData.attribute_set_id}
+                onChange={(e) => handleInputChange('attribute_set_id', e.target.value)}
+                className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                required
+              >
+                <option value="">Select Category</option>
+                {attributeSets.map(set => (
+                  <option key={set.id} value={set.id}>{set.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="block text-white font-medium mb-2">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => handleInputChange('status', e.target.value)}
+                className="input-modern w-full px-4 py-3 rounded-xl text-white"
+              >
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            {/* Featured */}
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                id="featured"
+                checked={formData.featured}
+                onChange={(e) => handleInputChange('featured', e.target.checked)}
+                className="w-5 h-5 rounded bg-white/10 border border-white/20 text-purple-500 focus:ring-purple-500"
+              />
+              <label htmlFor="featured" className="text-white font-medium">
+                Featured Product
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Attributes */}
+        {selectedAttributeSet && (
+          <div className="glass-card-elevated rounded-2xl p-8">
+            <h2 className="text-xl font-bold text-white mb-6">Product Attributes</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Common attributes */}
+              <div>
+                <label className="block text-white font-medium mb-2">Brand</label>
+                <input
+                  type="text"
+                  value={formData.attributes.brand || ''}
+                  onChange={(e) => handleAttributeChange('brand', e.target.value)}
+                  className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                  placeholder="Product brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Color</label>
+                <input
+                  type="text"
+                  value={formData.attributes.color || ''}
+                  onChange={(e) => handleAttributeChange('color', e.target.value)}
+                  className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                  placeholder="Product color"
+                />
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Weight (kg)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.attributes.weight || ''}
+                  onChange={(e) => handleAttributeChange('weight', e.target.value)}
+                  className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Category-specific attributes */}
+              {selectedAttributeSet.name === 'Fashion & Apparel' && (
+                <>
+                  <div>
+                    <label className="block text-white font-medium mb-2">Size</label>
+                    <select
+                      value={formData.attributes.size || ''}
+                      onChange={(e) => handleAttributeChange('size', e.target.value)}
+                      className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                    >
+                      <option value="">Select Size</option>
+                      <option value="XS">XS</option>
+                      <option value="S">S</option>
+                      <option value="M">M</option>
+                      <option value="L">L</option>
+                      <option value="XL">XL</option>
+                      <option value="XXL">XXL</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-white font-medium mb-2">Material</label>
+                    <input
+                      type="text"
+                      value={formData.attributes.material || ''}
+                      onChange={(e) => handleAttributeChange('material', e.target.value)}
+                      className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                      placeholder="e.g., Cotton, Polyester"
+                    />
+                  </div>
+                </>
+              )}
+
+              {selectedAttributeSet.name === 'Electronics & Tech' && (
+                <>
+                  <div>
+                    <label className="block text-white font-medium mb-2">Warranty (months)</label>
+                    <input
+                      type="number"
+                      value={formData.attributes.warranty || ''}
+                      onChange={(e) => handleAttributeChange('warranty', e.target.value)}
+                      className="input-modern w-full px-4 py-3 rounded-xl text-white"
+                      placeholder="12"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Save Result */}
+        {saveResult && (
+          <div className={`p-4 rounded-xl ${
+            saveResult.success 
+              ? 'bg-green-500/20 border border-green-500/30' 
+              : 'bg-red-500/20 border border-red-500/30'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <span className={`text-lg ${saveResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {saveResult.success ? '✅' : '❌'}
+              </span>
+              <span className={saveResult.success ? 'text-green-300' : 'text-red-300'}>
+                {saveResult.message}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex space-x-4">
+          <button
+            type="submit"
+            disabled={saving}
+            className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${
+              saving 
+                ? 'bg-gray-500 cursor-not-allowed' 
+                : 'button-primary hover:scale-105'
+            }`}
+          >
+            {saving ? 'Saving...' : (editingProduct ? 'Update Product' : 'Create Product')}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
